@@ -257,32 +257,34 @@ Sparky(
     }
   }
 );
-
 Sparky(
   {
     name: "returnog",
     fromMe: isPublic,
     category: "converters",
-    desc: "Convert replied document back to media",
+    desc: "Return document back to original media",
   },
   async ({ m, client }) => {
     try {
       const quoted = m.quoted;
 
-      if (!quoted || !quoted.mimetype)
-        return m.reply("Reply to a document☠️");
+      if (!quoted || !quoted.message?.documentMessage)
+        return m.reply("Reply to a document message bro");
 
-      const mime = quoted.mimetype;
+      const mime = quoted.message.documentMessage.mimetype;
+
       const buffer = await quoted.download();
+
       let type = "document";
       if (mime.startsWith("image")) type = "image";
       else if (mime.startsWith("video")) type = "video";
       else if (mime.startsWith("audio")) type = "audio";
 
-      await client.sendMessage(
+      await m.sendMsg(
         m.jid,
-        { [type]: buffer, mimetype: mime },
-        { quoted: m }
+        buffer,
+        { mimetype: mime, quoted: m },
+        type
       );
 
     } catch (err) {
