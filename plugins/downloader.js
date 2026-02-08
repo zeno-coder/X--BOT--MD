@@ -38,29 +38,39 @@ Sparky({
     name: "jain",
     fromMe: true,
     category: "misc",
-    desc: "Query GPT-3 with a prompt"
+    desc: "AI chat using Groq"
 },
 async ({ m, client, args }) => {
-    // Get arguments either from command or quoted message
+
     args = args || m.quoted?.text;
-    
-    // Check if prompt exists
-    if (!args) return await m.reply("Please provide a prompt or quote a message");
-    
+    if (!args) return await m.reply("Give a prompt bro 🙂");
+
     try {
-        // Make API request
-        const q = await getJson(`${config.API}/api/search/gpt3?search=${encodeURIComponent(args)}`);
-        
-        // Check if response is valid
-        if (!q?.data) throw new Error("Invalid API response");
-        
-        // Send the response
-        return await m.reply(q.data);
-    } catch (error) {
-        console.error("GPT Error:", error);
-        return await m.reply("An error occurred while processing your request");
+        const response = await axios.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            {
+                model: "llama3-8b-8192",
+                messages: [
+                    { role: "user", content: args }
+                ]
+            },
+            {
+                headers: {
+                    "Authorization": `Bearer ${config.GROQ_API_KEY}`,
+                    "Content-Type": "application/json"
+                }
+            }
+        );
+
+        const reply = response.data.choices[0].message.content;
+        return await m.reply(reply);
+
+    } catch (err) {
+        console.log(err.response?.data || err.message);
+        return await m.reply("AI error bro 😅");
     }
 });
+
 // Sparky({
 //     name: "apk",
 //     fromMe: isPublic,
