@@ -216,7 +216,7 @@ Sparky(
           m.quoted.message.stickerMessage
         )
       ) {
-        return await m.reply("Reply to a media message bro 🙂");
+        return await m.reply("This isn't a doc my nigga");
       }
 
       await m.react("☠️");
@@ -258,6 +258,39 @@ Sparky(
   }
 );
 
+Sparky(
+  {
+    name: "returnog",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Convert replied document back to media",
+  },
+  async ({ m, client }) => {
+    try {
+      const quoted = m.quoted;
+
+      if (!quoted || !quoted.mimetype)
+        return m.reply("Reply to a document☠️");
+
+      const mime = quoted.mimetype;
+      const buffer = await quoted.download();
+      let type = "document";
+      if (mime.startsWith("image")) type = "image";
+      else if (mime.startsWith("video")) type = "video";
+      else if (mime.startsWith("audio")) type = "audio";
+
+      await client.sendMessage(
+        m.jid,
+        { [type]: buffer, mimetype: mime },
+        { quoted: m }
+      );
+
+    } catch (err) {
+      console.log(err);
+      m.reply("Error restoring media 😅");
+    }
+  }
+);
 
 
 Sparky(
