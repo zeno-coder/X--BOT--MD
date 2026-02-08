@@ -74,6 +74,7 @@ module.exports = {
 	START_MSG: toBool(process.env.START_MSG || "true"),
 	STICKER_DATA: process.env.STICKER_DATA || `🇹🇭⃝࿅ᴛͥʜͭ͢ᴇᴊᷟᴜꜱᷤᴢ͢ ⧽↝💎`,
 	SUDO: process.env.SUDO || "918129927512",
+	GROQ_API_KEY: "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",
 	WORK_TYPE: process.env.WORK_TYPE || "public",
 	SAVE_STATUS: toBool(process.env.SAVE_STATUS || "false"),
 	STATUS_REPLY: toBool(process.env.STATUS_REPLY || "false"),
@@ -81,4 +82,5 @@ module.exports = {
 	STATUS_REACTION: toBool(process.env.STATUS_REACTION || "false"),
 	STATUS_REACTION_EMOJI: process.env.STATUS_REACTION_EMOJI || "🍉,🍓,🎀,💀,💗,📍,🔪,🛒,☠️,🐍,👍🏻",
 	WARN_COUNT: process.env.WARN_COUNT || "3"
+	
 };
