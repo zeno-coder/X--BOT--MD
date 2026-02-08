@@ -197,6 +197,49 @@ Sparky({
 			}
 		});
 
+Sparky(
+  {
+    name: "doc",
+    fromMe: isPublic,
+    category: "tools",
+    desc: "Convert replied media to document",
+  },
+  async ({ m, client, args }) => {
+    try {
+      const quoted = m.quoted;
+
+      if (!quoted || !quoted.mimetype)
+        return await m.reply("this isn't a media my nigger");
+
+      let filename = args || "file";
+
+      // Auto extension detect
+      if (!filename.includes(".")) {
+        const ext = quoted.mimetype.split("/")[1] || "bin";
+        filename += `.${ext}`;
+      }
+
+      // Download media
+      const buffer = await quoted.download();
+
+      // Send as document
+      await client.sendMessage(
+        m.jid,
+        {
+          document: buffer,
+          fileName: filename,
+          mimetype: quoted.mimetype,
+        },
+        { quoted: m }
+      );
+
+    } catch (err) {
+      console.log(err);
+      m.reply("Error converting media 😅");
+    }
+  }
+);
+
 
 Sparky(
 		{
