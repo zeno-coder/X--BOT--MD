@@ -1,5 +1,6 @@
 const { Sparky, isPublic, spdl } = require("../lib");
 const { getJson, extractUrlsFromText, getString, isUrl } = require("./pluginsCore");
+const { addMessage, getMessages } = require("../lib/chatMemory");
 const axios = require('axios');
 const fetch = require('node-fetch');
 const gis = require("g-i-s");
@@ -38,36 +39,44 @@ Sparky({
     name: "jain",
     fromMe: true,
     category: "misc",
-    desc: "AI chat using Groq"
+    desc: "AI chat with memory"
 },
-async ({ m, client, args }) => {
+async ({ m, args }) => {
 
     args = args || m.quoted?.text;
-    if (!args) return await m.reply("Give a prompt bro 🙂");
+    if (!args) return m.reply("Hi JAIN HERE☠️");
 
     try {
-        const response = await axios.post(
+
+        const chatId = m.jid;
+        const history = getMessages(chatId);
+
+        history.push({ role: "user", content: args });
+
+        const res = await axios.post(
             "https://api.groq.com/openai/v1/chat/completions",
             {
                 model: "llama-3.3-70b-versatile",
-                messages: [
-                    { role: "user", content: args }
-                ]
+                messages: history
             },
             {
                 headers: {
-                    "Authorization": `Bearer ${config.GROQ_API_KEY}`,
+                    Authorization: `Bearer ${config.GROQ_API_KEY}`,
                     "Content-Type": "application/json"
                 }
             }
         );
 
-        const reply = response.data.choices[0].message.content;
-        return await m.reply(reply);
+        const reply = res.data.choices[0].message.content;
+
+        addMessage(chatId, "user", args);
+        addMessage(chatId, "assistant", reply);
+
+        return m.reply(reply);
 
     } catch (err) {
-        console.log(err.response?.data || err.message);
-        return await m.reply("AI error bro 😅");
+        console.log(err);
+        return m.reply("JAIN ERROR NE UMBI☠️");
     }
 });
 
