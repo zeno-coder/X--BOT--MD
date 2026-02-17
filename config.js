@@ -74,7 +74,7 @@ module.exports = {
 	START_MSG: toBool(process.env.START_MSG || "true"),
 	STICKER_DATA: process.env.STICKER_DATA || `🇹🇭⃝࿅ᴛͥʜͭ͢ᴇᴊᷟᴜꜱᷤᴢ͢ ⧽↝💎`,
 	SUDO: process.env.SUDO || "918129927512",
-	GROQ_API_KEY: process.env.GROQ_API_KEY || "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",
+	GROQ_API_KEY: process.env.GROQ_API_KEY || "",
 	WORK_TYPE: process.env.WORK_TYPE || "public",
 	SAVE_STATUS: toBool(process.env.SAVE_STATUS || "false"),
 	STATUS_REPLY: toBool(process.env.STATUS_REPLY || "false"),
