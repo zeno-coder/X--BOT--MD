@@ -1,5 +1,6 @@
-const { Sparky, isPublic, spdl, askGroq, addMessage, getMessages } = require("../lib");
+const { Sparky, isPublic, spdl } = require("../lib");
 const { getJson, extractUrlsFromText, getString, isUrl } = require("./pluginsCore");
+const { addMessage, getMessages } = require("../lib/chatMemory");
 const axios = require('axios');
 const fetch = require('node-fetch');
 const gis = require("g-i-s");
@@ -21,12 +22,12 @@ Sparky(
         if (!args) return await m.reply(lang.NEED_URL);
         //if (isUrl(args)) return await m.reply(lang.NOT_URL);
         try {
-            await m.react('⬇️');
+            await m.react('☠️');
             let response = await getJson(config.API + "/api/downloader/igdl?url=" + args);
             for (let i of response.data) {
                 await m.sendMsg(m.jid, i.url, { quoted: m }, i.type)
             }
-            await m.react('✅');
+            await m.react('🍻');
         } catch (e) {
             console.log(e);
             await m.react('❌');
@@ -35,106 +36,177 @@ Sparky(
 );
 
 Sparky({
-    name: "sparky",
+    name: "nana",
     fromMe: isPublic,
     category: "misc",
     desc: "AI chat with memory"
 },
 async ({ m, args }) => {
-    if(!config.GROQ_API_KEY) return m.reply("_Please provide a grok api key_");
+
     args = args || m.quoted?.text;
-    if (!args) return m.reply("_Hi this is Sparky Your Ai. Assistant How can i help you?_");
+    if (!args) return m.reply("Hi NANA HERE🎈");
 
     try {
-        const chatId = m.jid;
-        let history = getMessages(chatId) || [];
-        history = history
-            .filter(msg => msg && msg.role && msg.content)
-            .map(msg => ({
-                role: msg.role,
-                content: String(msg.content)
-            }))
-        const messages = [
-            {
-                role: "system",
-                content: "You are Sparky, a helpful WhatsApp AI assistant."
-            },
-            ...history,
-            { role: "user", content: args }
-        ];
-        addMessage(chatId, "user", args);
-        const getResult = await askGroq(messages);
-        addMessage(chatId, "assistant", getResult);
-        return m.reply(getResult);
-    } catch (err) {
-        console.log("ERROR:", err.message);
-        return m.reply("AI broke ☠️");
-    }
-});
 
-Sparky(
-    {
-        name: "img",
-        fromMe: isPublic,
-        desc: "Google Image search",
-        category: "downloader",
-    },
-    async ({
-        m, client, args
-    }) => {
-        try {
-            async function gimage(query, amount = 5) {
-                let list = [];
-                return new Promise((resolve, reject) => {
-                    gis(query, async (error, result) => {
-                        for (
-                            var i = 0;
-                            i < (result.length < amount ? result.length : amount);
-                            i++
-                        ) {
-                            list.push(result[i].url);
-                            resolve(list);
-                        }
-                    });
-                });
-            }
-            if (!args) return await m.reply("Enter Query,Number");
-            let [query,
-                amount] = args.split(",");
-            let result = await gimage(query, amount);
-            await m.reply(
-                `_Downloading ${amount || 5} images for ${query}_`
-            );
-            for (let i of result) {
-                await m.sendMsg(m.jid, i, {}, "image")
-            }
+const chatId = m.jid;
+let history = getMessages(chatId) || [];
+history = history
+  .filter(msg => msg && msg.role && msg.content)
+  .map(msg => ({
+    role: msg.role,
+    content: String(msg.content)
+  }));
 
-        } catch (e) {
-            console.log(e)
-        }
+const messages = [
+  {
+    role: "system",
+    content: "You are NANA, a helpful WhatsApp AI assistant."
+  },
+  ...history,
+  { role: "user", content: args }
+];
+
+const res = await axios.post(
+  "https://api.groq.com/openai/v1/chat/completions",
+  {
+    model: "llama-3.1-8b-instant",
+    messages: messages
+  },
+  {
+    headers: {
+      Authorization: `Bearer ${config.GROQ_API_KEY}`,
+      "Content-Type": "application/json"
     }
+  }
 );
 
+const reply = res.data.choices[0].message.content;
+addMessage(chatId, "user", args);
+addMessage(chatId, "assistant", reply);
+
+return m.reply(reply);
+
+    } catch (err) {
+    console.log("STATUS:", err.response?.status);
+    console.log("DATA:", err.response?.data);
+    console.log("MESSAGE:", err.message);
+    return m.reply("AI broke ☠️");
+}
+});
+
+// Sparky({
+//     name: "apk",
+//     fromMe: isPublic,
+//     category: "downloader",
+//     desc: "Find and download APKs from Aptoide by app ID",
+// },
+// async ({
+//     m, client, args
+// }) => {
+//     let appId = args || m.quoted?.text;
+//     if (!appId) return await m.reply(lang.NEED_Q);
+
+//     try {
+//         await m.react('⬇️');
+
+//         const { result: appInfo } = await getJson(AP + "download/aptoide?id=" + appId);
+        
+//         await client.sendMessage(m.jid, {
+//             document: {
+//                 url: appInfo.link
+//             },
+//             fileName: appInfo.appname,
+//             caption: `App Name: ${appInfo.appname}\nDeveloper: ${appInfo.developer}`,
+//             mimetype: "application/vnd.android.package-archive"
+//         }, {
+//             quoted: m
+//         });
+//         await m.react('✅');
+//     } catch (error) {
+//         await m.react('❌');
+//         console.error(error);
+//     }
+// });
+
+Sparky({
+    name: "img",
+    fromMe: isPublic,
+    desc: "Search images (Pexels)",
+    category: "downloader",
+}, async ({ m, args }) => {
+    try {
+        if (!args) return m.reply("Enter query bro\nExample: img car,5");
+
+        let [query, amount] = args.split(",");
+        amount = parseInt(amount) || 5;
+
+        await m.reply(`🔍 Searching ${amount} images for *${query}*...`);
+
+        const res = await axios.get(
+            "https://api.pexels.com/v1/search",
+            {
+                headers: {
+                    Authorization: config.PEXELS_KEY
+                },
+                params: {
+                    query: query,
+                    per_page: amount
+                }
+            }
+        );
+
+        const images = res.data.photos;
+
+        if (!images || images.length === 0) {
+            return m.reply("No images found ❌");
+        }
+
+        for (let img of images) {
+            await m.sendMsg(m.jid, img.src.medium, {}, "image");
+        }
+
+    } catch (e) {
+        console.log("PEXELS ERROR:", e.response?.data || e.message);
+        await m.reply("Error fetching images ❌");
+    }
+});
 Sparky({
     name: "pintrest",
     fromMe: isPublic,
     category: "downloader",
-    desc: "Download images and content from Pinterest",
+    desc: "Download images from Pinterest",
 },
-async ({
-    m, client, args
-}) => {
+async ({ m, args }) => {
     try {
-        let match = args || m.quoted?.text;
-        if (!match) return await m.reply(lang.NEED_URL);
+        let url = args || m.quoted?.text;
+        if (!url) return await m.reply("❌ Give Pinterest URL");
+
         await m.react('⬇️');
-        //if (!match.includes("pin.it")) return await m.reply("_Please provide a valid Pinterest URL_");
-        const result = await getJson(config.API + "/api/downloader/pin?url=" + match);
-        await m.sendFromUrl(result.data.url, { caption: result.data.created_at });
+
+        const res = await getJson(`https://api.itzpire.com/download/pinterest?url=${url}`);
+
+        console.log("API RESPONSE:", res);
+
+        const data = res?.data;
+
+        if (!data || !data.images || data.images.length === 0) {
+            await m.react('❌');
+            return m.reply("❌ No images found");
+        }
+
+        await m.reply(`📥 Downloading ${data.images.length} images...`);
+
+        // 🔥 send all images
+        for (let img of data.images) {
+            await m.sendMsg(m.jid, img, {}, "image");
+        }
+
         await m.react('✅');
-    } catch (error) {
+
+    } catch (err) {
+        console.log(err);
         await m.react('❌');
-        console.error(error);
+        m.reply("❌ Pinterest download failed");
     }
 });
 
@@ -209,7 +281,7 @@ Sparky({
   });
 
 Sparky({
-    name: "xnxx",
+    name: "fire",
     fromMe: isPublic,
     category: "downloader",
     desc: "Download media from XNXX by search or URL",
@@ -220,13 +292,13 @@ async ({
     try {
         let match = args || m.quoted?.text;
         if (!match) return await m.reply(lang.NEED_Q);
-            await m.react('🔎');
+            await m.react('☠️');
             const { result } = await getJson(config.API + "/api/search/xnxx?search=" + match);
-            await m.react('⬇️');
+            await m.react('👄');
             var xnxx = result.result[0].link
             const xdl = await getJson(`${config.API}/api/downloader/xnxx?url=${xnxx}`)
             await m.sendFromUrl(xdl.data.files.high, { caption: xdl.data.title });
-        await m.react('✅');
+        await m.react('💦');
     } catch (error) {
         await m.react('❌');
         m.reply(error);
