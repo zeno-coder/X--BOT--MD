@@ -3,6 +3,8 @@ const { getJson, extractUrlsFromText, getString, isUrl } = require("./pluginsCor
 const { addMessage, getMessages } = require("../lib/chatMemory");
 const axios = require('axios');
 const fetch = require('node-fetch');
+const FormData = require("form-data");
+const crypto = require("crypto");
 const gis = require("g-i-s");
 const config = require("../config.js");
 const lang = getString('download');
@@ -358,5 +360,94 @@ async ({
     } catch (error) {
         await m.react('❌');
         console.error(error);
+    }
+});
+
+const acr = {
+    host: "identify-ap-southeast-1.acrcloud.com",
+    endpoint: "/v1/identify",
+    access_key: "dafeeb1a765c1e2fc0a9612ea867cef9",
+    access_secret: "gaG5ejZaNbMlbUG0gEkDfZUnrgyuClpbT85xLNof",
+};
+
+function buildStringToSign(method, uri, accessKey, dataType, signatureVersion, timestamp) {
+    return [method, uri, accessKey, dataType, signatureVersion, timestamp].join("\n");
+}
+
+function sign(signString, accessSecret) {
+    return crypto
+        .createHmac("sha1", accessSecret)
+        .update(Buffer.from(signString, "utf-8"))
+        .digest("base64");
+}
+
+Sparky({
+    name: "find",
+    fromMe: isPublic,
+    category: "search",
+    desc: "Find music from audio/video"
+}, async ({ m }) => {
+
+    if (!m.quoted) return m.reply("❌ Reply to audio or video");
+
+    if (!m.quoted.message.audioMessage && !m.quoted.message.videoMessage)
+        return m.reply("❌ Reply to valid audio/video");
+
+    try {
+        await m.react("🔍");
+        const buffer = await m.quoted.download();
+        const timestamp = Math.floor(Date.now() / 1000);
+        const stringToSign = buildStringToSign(
+            "POST",
+            acr.endpoint,
+            acr.access_key,
+            "audio",
+            "1",
+            timestamp
+        );
+
+        const signature = sign(stringToSign, acr.access_secret);
+        const form = new FormData();
+        form.append("sample", buffer);
+        form.append("sample_bytes", buffer.length);
+        form.append("access_key", acr.access_key);
+        form.append("data_type", "audio");
+        form.append("signature_version", "1");
+        form.append("signature", signature);
+        form.append("timestamp", timestamp);
+        const res = await fetch(`https://${acr.host}${acr.endpoint}`, {
+            method: "POST",
+            body: form
+        });
+
+        const data = await res.json();
+        console.log("ACR RESPONSE:", data); 
+        if (data.status.msg !== "Success") {
+            await m.react("❌");
+            return m.reply(`❌ ${data.status.msg}`);
+        }
+        const music = data.metadata.music[0];
+        const title = music.title;
+        const album = music.album?.name || "Unknown";
+        const artists = music.artists?.map(a => a.name).join(", ") || "Unknown";
+        const date = music.release_date || "Unknown";
+        await m.react("✅");
+        return m.reply(
+`♪─── 𝗦𝗼𝗻𝗴 𝗙𝗼𝘂𝗻𝗱! ───♪
+
+▸ 𝗧𝗶𝘁𝗹𝗲   : ${title}
+▸ 𝗔𝗿𝘁𝗶𝘀𝘁  : ${artists}
+▸ 𝗔𝗹𝗯𝘂𝗺   : ${album}
+▸ 𝗥𝗲𝗹𝗲𝗮𝘀𝗲 : ${date}
+
+────────────────────
+`
+        );
+
+    } catch (err) {
+        console.log("FULL ERROR:", err);
+        console.log("RESPONSE:", err?.response?.data);
+        await m.react("❌");
+        return m.reply("❌ Error detecting song");
     }
 });
