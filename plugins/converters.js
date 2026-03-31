@@ -3,7 +3,7 @@ const {getString, appendMp3Data, convertToMp3, addExifToWebP, getBuffer, getJson
 const googleTTS = require('google-tts-api');
 const config = require('../config.js');
 const lang = getString('converters');
-
+const fs = require("fs");
 Sparky({
     name: "url",
     fromMe: true,
@@ -14,14 +14,14 @@ Sparky({
       return m.reply('Reply to an Image/Video/Audio');
     }
     try {
-        await m.react('⏫');
+        await m.react('☠️');
       const mediaBuffer = await m.quoted.download();
       const mediaUrl = await handleMediaUpload(mediaBuffer);
-      await m.react('✅');
+      await m.react('🍻');
       m.reply(mediaUrl);
     } catch (error) {
         await m.react('❌');
-      m.reply('An error occurred while uploading the media.');
+      m.reply('An error occurred while uploading the media(umbi).');
     }
   });
 
@@ -47,7 +47,7 @@ Sparky(
 
 Sparky(
     {
-        name: "vv",
+        name: "👀👀",
         fromMe: true,
         category: "converters",
         desc: "Resends the view Once message"
@@ -59,7 +59,7 @@ Sparky(
             return m.reply("_Reply to ViewOnce Message !_");
         }
         try {
-            m.react("⏫");
+            m.react("☠️");
 		let buff = await m.quoted.download();
 		return await m.sendFile(buff);
         } catch (e) {
@@ -80,13 +80,13 @@ Sparky({
 		if (!m.quoted || !(m.quoted.message.imageMessage || m.quoted.message.videoMessage)) {
 			return await m.reply(lang.STICKER_ALERT);
 		}
-		await m.react('⏫');
+		await m.react('☠️');
 		await m.sendMsg(m.jid, await m.quoted.download(), {
 			packName: args.split(';')[0] || config.STICKER_DATA.split(';')[0],
 			authorName: args.split(';')[1] || config.STICKER_DATA.split(';')[1],
 			quoted: m
 		}, "sticker");
-		return await m.react('✅');
+		return await m.react('🍻');
 	});
 
 
@@ -103,9 +103,9 @@ Sparky({
 		if (!m.quoted || !(m.quoted.message.audioMessage || m.quoted.message.videoMessage || (m.quoted.message.documentMessage && m.quoted.message.documentMessage.mimetype === 'video/mp4'))) {
 			return await m.reply(lang.MP3_ALERT);
 		}
-		await m.react('⏫');
+		await m.react('☠️');
 		await m.sendMsg(m.jid, await convertToMp3(await m.quoted.download()), { mimetype: "audio/mpeg", quoted: m }, 'audio');
-		return await m.react('✅');
+		return await m.react('🍻');
 	});
 
 
@@ -121,7 +121,7 @@ Sparky({
 		client
 	}) => {
 		if (!m.quoted || !(m.quoted.message.stickerMessage || m.quoted.message.audioMessage || m.quoted.message.imageMessage || m.quoted.message.videoMessage)) return m.reply('reply to a sticker/audio');
-		await m.react('⏫');
+		await m.react('☠️');
         if (m.quoted.message.stickerMessage || m.quoted.message.imageMessage || m.quoted.message.videoMessage) {
             args = args || config.STICKER_DATA;
             return await m.sendMsg(m.jid, await m.quoted.download(), {
@@ -140,7 +140,7 @@ Sparky({
                 mimetype: 'audio/mpeg'
             },'audio');
         }
-		await m.react('✅');
+		await m.react('🍻');
 	});
 
 
@@ -156,11 +156,11 @@ Sparky({
 		if (!m.quoted || !m.quoted.message.stickerMessage || m.quoted.message.stickerMessage.isAnimated) {
 			return await m.reply(lang.PHOTO_ALERT);
 		}
-		await m.react('⏫');
+		await m.react('☠️');
 		await m.sendMsg(m.jid, await m.quoted.download(), {
 			quoted: m
 		}, "image");
-		return await m.react('✅');
+		return await m.react('🍻');
 	});
 
 	Sparky(
@@ -197,6 +197,103 @@ Sparky({
 			}
 		});
 
+Sparky(
+  {
+    name: "doc",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Convert replied media to document",
+  },
+  async ({ m, client, args }) => {
+    try {
+      if (
+        !m.quoted ||
+        !(
+          m.quoted.message.imageMessage ||
+          m.quoted.message.videoMessage ||
+          m.quoted.message.audioMessage ||
+          m.quoted.message.documentMessage ||
+          m.quoted.message.stickerMessage
+        )
+      ) {
+        return await m.reply("This isn't a doc my nigga");
+      }
+
+      await m.react("☠️");
+
+      const buffer = await m.quoted.download();
+
+      // Detect mimetype properly
+      const mimetype =
+        m.quoted.message.imageMessage?.mimetype ||
+        m.quoted.message.videoMessage?.mimetype ||
+        m.quoted.message.audioMessage?.mimetype ||
+        m.quoted.message.documentMessage?.mimetype ||
+        "application/octet-stream";
+
+      let filename = args || "file";
+
+      if (!filename.includes(".")) {
+        const ext = mimetype.split("/")[1] || "bin";
+        filename += `.${ext}`;
+      }
+
+      await client.sendMessage(
+        m.jid,
+        {
+          document: buffer,
+          mimetype,
+          fileName: filename,
+        },
+        { quoted: m }
+      );
+
+      await m.react("🍻");
+
+    } catch (err) {
+      console.log(err);
+      await m.react("❌");
+      m.reply("Error converting media 😅");
+    }
+  }
+);
+Sparky(
+  {
+    name: "returnog",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Return document back to original media",
+  },
+  async ({ m, client }) => {
+    try {
+      const quoted = m.quoted;
+
+      if (!quoted || !quoted.message?.documentMessage)
+        return m.reply("Reply to a document message bro");
+
+      const mime = quoted.message.documentMessage.mimetype;
+
+      const buffer = await quoted.download();
+
+      let type = "document";
+      if (mime.startsWith("image")) type = "image";
+      else if (mime.startsWith("video")) type = "video";
+      else if (mime.startsWith("audio")) type = "audio";
+
+      await m.sendMsg(
+        m.jid,
+        buffer,
+        { mimetype: mime, quoted: m },
+        type
+      );
+
+    } catch (err) {
+      console.log(err);
+      m.reply("Error restoring media 😅");
+    }
+  }
+);
+
 
 Sparky(
 		{
@@ -231,94 +328,3 @@ Sparky(
 	
 			}
 		});
-
-Sparky(
-  {
-    name: "doc",
-    fromMe: isPublic,
-    category: "converters",
-    desc: "Convert replied media to document",
-  },
-  async ({ m, client, args }) => {
-    try {
-      if (
-        !m.quoted ||
-        !(
-          m.quoted.message.imageMessage ||
-          m.quoted.message.videoMessage ||
-          m.quoted.message.audioMessage ||
-          m.quoted.message.documentMessage ||
-          m.quoted.message.stickerMessage
-        )
-      ) {
-        return await m.reply("_Replay to a meadia_");
-      }
-      await m.react("⏳");
-      const buffer = await m.quoted.download();
-      const mimetype =
-        m.quoted.message.imageMessage?.mimetype ||
-        m.quoted.message.videoMessage?.mimetype ||
-        m.quoted.message.audioMessage?.mimetype ||
-        m.quoted.message.documentMessage?.mimetype ||
-        "application/octet-stream";
-
-      let filename = args || "file";
-
-      if (!filename.includes(".")) {
-        const ext = mimetype.split("/")[1] || "bin";
-        filename += `.${ext}`;
-      }
-
-      await client.sendMessage(
-        m.jid,
-        {
-          document: buffer,
-          mimetype,
-          fileName: filename,
-        },
-        { quoted: m }
-      );
-
-      await m.react("✅");
-
-    } catch (err) {
-      console.log(err);
-      await m.react("❌");
-      m.reply("Error converting media 😅");
-    }
-  }
-);
-Sparky(
-  {
-    name: "nondoc",
-    fromMe: isPublic,
-    category: "converters",
-    desc: "Return document back to original media",
-  },
-  async ({ m, client }) => {
-    try {
-      const quoted = m.quoted;
-      if (!quoted || !quoted.message?.documentMessage)
-        return m.reply("_Reply to a document message_");
-      const mime = quoted.message.documentMessage.mimetype;
-	  await m.react("⏳");
-      const buffer = await quoted.download();
-      let type = "document";
-      if (mime.startsWith("image")) type = "image";
-      else if (mime.startsWith("video")) type = "video";
-      else if (mime.startsWith("audio")) type = "audio";
-      await m.sendMsg(
-        m.jid,
-        buffer,
-        { mimetype: mime, quoted: m },
-        type
-      );
-	  await m.react("✅");
-
-    } catch (err) {
-      console.log(err);
-	  await m.react("❌");
-      m.reply("Error restoring media 😅");
-    }
-  }
-);
