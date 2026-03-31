@@ -125,3 +125,91 @@ Sparky({
     pdfStore[m.jid] = [];
     m.reply("_🗑️ Cleared stored images_");
 });
+
+
+Sparky({
+    name: "addpdf",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Add PDF to merge list",
+}, async ({ m }) => {
+
+    if (!m.quoted || !m.quoted.message.documentMessage) {
+        return m.reply("❌ Reply to a PDF file");
+    }
+
+    const mime = m.quoted.message.documentMessage.mimetype;
+    if (!mime.includes("pdf")) {
+        return m.reply("❌ Only PDF files allowed");
+    }
+
+    await m.react("☠️");
+
+    const buffer = await m.quoted.download();
+
+    if (!mergePdfStore[m.jid]) mergePdfStore[m.jid] = [];
+
+    mergePdfStore[m.jid].push(buffer);
+
+    await m.react("🍻");
+    m.reply(`📄 PDF added (${mergePdfStore[m.jid].length})`);
+});
+
+Sparky({
+    name: "mergepdf",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Merge added PDFs",
+}, async ({ m, client }) => {
+
+    const files = mergePdfStore[m.jid];
+
+    if (!files || files.length < 2) {
+        return m.reply("❌ Need at least 2 PDFs");
+    }
+
+    try {
+        await m.react("☠️");
+
+        const mergedPdf = await PDFLib.create();
+
+
+        for (let file of files) {
+            const pdf = await PDFLib.load(file);
+            const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+
+            pages.forEach((page) => mergedPdf.addPage(page));
+        }
+
+        const mergedBytes = await mergedPdf.save();
+
+        await client.sendMessage(
+            m.jid,
+            {
+                document: Buffer.from(mergedBytes),
+                mimetype: "application/pdf",
+                fileName: "xbotmdmerged.pdf"
+            },
+            { quoted: m }
+        );
+
+        mergePdfStore[m.jid] = [];
+
+        await m.react("🍻");
+
+    } catch (err) {
+        console.log(err);
+        await m.react("❌");
+        m.reply("Error merging PDFs 😅");
+    }
+});
+
+Sparky({
+    name: "clearpdf",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Clear stored PDFs",
+}, async ({ m }) => {
+    mergePdfStore[m.jid] = [];
+    m.reply("🗑️ Cleared stored PDFs");
+});
