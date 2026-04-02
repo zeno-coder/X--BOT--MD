@@ -1,330 +1,524 @@
-const {Sparky, isPublic,uploadMedia,handleMediaUpload} = require("../lib");
-const {getString, appendMp3Data, convertToMp3, addExifToWebP, getBuffer, getJson} = require('./pluginsCore');
-const googleTTS = require('google-tts-api');
-const config = require('../config.js');
+const {Sparky, isPublic} = require("../lib");
+const {getString, getJson} = require('./pluginsCore');
+const PDFDocument = require("pdfkit");
+const {  
+    PDFDocument: PDFEditor, 
+    rgb, 
+    StandardFonts 
+} = require("pdf-lib"); 
 const lang = getString('converters');
-const fs = require("fs");
+let fs = require('fs');
+let pdfStore = {};
+let mergePdfStore = {};
+let pdfEditStore = {};
+
 Sparky({
-    name: "url",
-    fromMe: true,
-    desc: "",
+    name: "addimg",
+    fromMe: isPublic,
     category: "converters",
-  }, async ({ args, m }) => {
-    if (!m.quoted) {
-      return m.reply('Reply to an Image/Video/Audio');
-    }
-    try {
-        await m.react('☠️');
-      const mediaBuffer = await m.quoted.download();
-      const mediaUrl = await handleMediaUpload(mediaBuffer);
-      await m.react('🍻');
-      m.reply(mediaUrl);
-    } catch (error) {
-        await m.react('❌');
-      m.reply('An error occurred while uploading the media(umbi).');
-    }
-  });
+    desc: "Add image to PDF list",
+}, async ({ m }) => {
 
-Sparky(
-  {
-    name: "trt",
-    fromMe: true,
-    desc: "Translate text to a given language",
-    category: "converters",
-  },
-  async ({ client, m, args }) => {
-    try {
-      if (!args) return await m.reply('_Reply to any text with lang_\n_Eg : trt ml_');
-      const trtxt = m.quoted?.text;
-      const trtlang = args;
-      const trt = await getJson(`${config.API}/api/search/translate?text=${trtxt}&lang=${trtlang}`)
-      return m.reply(`${trt.result}`);
-    } catch (e) {
-      console.error(e);
+    if (!m.quoted || !m.quoted.message.imageMessage) {
+        return m.reply("❌ Reply to an image");
     }
-  }
-);
 
-Sparky(
-    {
-        name: "👀👀",
-        fromMe: true,
-        category: "converters",
-        desc: "Resends the view Once message"
-    },
-    async ({
-        m, client 
-    }) => {
-        if (!m.quoted) {
-            return m.reply("_Reply to ViewOnce Message !_");
-        }
-        try {
-            m.react("☠️");
-		let buff = await m.quoted.download();
-		return await m.sendFile(buff);
-        } catch (e) {
-            return m.react("❌");
-        } 
+    await m.react("☠️");
+
+    const buffer = await m.quoted.download();
+
+    if (!pdfStore[m.jid]) pdfStore[m.jid] = [];
+
+    pdfStore[m.jid].push({
+        type: "image",
+        content: buffer
     });
 
-Sparky({
-		name: "sticker",
-		fromMe: isPublic,
-		category: "converters",
-		desc: lang.STICKER_DESC
-	},
-	async ({
-		m,
-		args
-	}) => {
-		if (!m.quoted || !(m.quoted.message.imageMessage || m.quoted.message.videoMessage)) {
-			return await m.reply(lang.STICKER_ALERT);
-		}
-		await m.react('☠️');
-		await m.sendMsg(m.jid, await m.quoted.download(), {
-			packName: args.split(';')[0] || config.STICKER_DATA.split(';')[0],
-			authorName: args.split(';')[1] || config.STICKER_DATA.split(';')[1],
-			quoted: m
-		}, "sticker");
-		return await m.react('🍻');
-	});
-
+    await m.react("🍻");
+    m.reply(`🖼️ Image added (${pdfStore[m.jid].length})`);
+});
 
 Sparky({
-		name: "mp3",
-		fromMe: isPublic,
-		category: "converters",
-		desc: lang.MP3_DESC
-	},
-	async ({
-		m,
-		args
-	}) => {
-		if (!m.quoted || !(m.quoted.message.audioMessage || m.quoted.message.videoMessage || (m.quoted.message.documentMessage && m.quoted.message.documentMessage.mimetype === 'video/mp4'))) {
-			return await m.reply(lang.MP3_ALERT);
-		}
-		await m.react('☠️');
-		await m.sendMsg(m.jid, await convertToMp3(await m.quoted.download()), { mimetype: "audio/mpeg", quoted: m }, 'audio');
-		return await m.react('🍻');
-	});
+    name: "addtext",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Add text to PDF",
+}, async ({ m }) => {
 
+    const text = m.quoted?.text || m.text.split(" ").slice(1).join(" ");
+
+    if (!text) return m.reply("❌ Provide or reply to text");
+
+    if (!pdfStore[m.jid]) pdfStore[m.jid] = [];
+
+    pdfStore[m.jid].push({
+        type: "text",
+        content: text
+    });
+
+    m.reply(`📝 Text added (${pdfStore[m.jid].length})`);
+});
 
 Sparky({
-		name: "take",
-		fromMe: isPublic,
-		category: "converters",
-		desc: lang.TAKE_DESC
-	},
-	async ({
-		m,
-		args,
-		client
-	}) => {
-		if (!m.quoted || !(m.quoted.message.stickerMessage || m.quoted.message.audioMessage || m.quoted.message.imageMessage || m.quoted.message.videoMessage)) return m.reply('reply to a sticker/audio');
-		await m.react('☠️');
-        if (m.quoted.message.stickerMessage || m.quoted.message.imageMessage || m.quoted.message.videoMessage) {
-            args = args || config.STICKER_DATA;
-            return await m.sendMsg(m.jid, await m.quoted.download(), {
-			packName: `${args.split(';')[0]}` || `${config.STICKER_DATA.split(';')[0]}`,
-			authorName: `${args.split(';')[1]}` || `${config.STICKER_DATA.split(';')[1]}`,
-			quoted: m
-		}, "sticker");
-        } else if (m.quoted.message.audioMessage) {
-            const opt = {
-                title: args ? args.split(/[|,;]/) ? args.split(/[|,;]/)[0] : args : config.AUDIO_DATA.split(/[|,;]/)[0] ? config.AUDIO_DATA.split(/[|,;]/)[0] : config.AUDIO_DATA,
-                body: args ? args.split(/[|,;]/)[1] : config.AUDIO_DATA.split(/[|,;]/)[1],
-                image: (args && args.split(/[|,;]/)[2]) ? args.split(/[|,;]/)[2] : config.AUDIO_DATA.split(/[|,;]/)[2]
-            }
-            const Data = await AudioData(await convertToMp3(await m.quoted.download()), opt);
-            return await m.sendMsg(m.jid ,Data,{
-                mimetype: 'audio/mpeg'
-            },'audio');
+    name: "pdf",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Convert stored images into PDF",
+}, async ({ m, client }) => {
+
+    try {
+        if (!pdfStore[m.jid] || pdfStore[m.jid].length === 0) {
+            return m.reply("⚠️ No images stored");
         }
-		await m.react('🍻');
-	});
 
+        await m.react("☠️");
+
+        const filePath = `./temp_${Date.now()}.pdf`;
+        const doc = new PDFDocument();
+
+        doc.pipe(fs.createWriteStream(filePath));
+
+pdfStore[m.jid].forEach((item, index) => {
+
+    if (index !== 0) doc.addPage();
+
+    if (item.type === "image") {
+        doc.image(item.content, {
+            fit: [500, 700],
+            align: "center",
+            valign: "center"
+        });
+    }
+
+    if (item.type === "text") {
+        doc
+          .fontSize(16)
+          .text(item.content, {
+              align: "left"
+          });
+        }
+        });
+        
+
+        doc.end();
+
+        setTimeout(async () => {
+            await client.sendMessage(m.jid, {
+                document: fs.readFileSync(filePath),
+                mimetype: "application/pdf",
+                fileName: "xbotmd.pdf"
+            }, { quoted: m });
+
+            fs.unlinkSync(filePath);
+            pdfStore[m.jid] = []; 
+
+            await m.react("🍻");
+        }, 2000);
+
+    } catch (err) {
+        console.log(err);
+        await m.react("❌");
+        m.reply("Error creating PDF 😅");
+    }
+});
 
 Sparky({
-		name: "photo",
-		fromMe: isPublic,
-		category: "converters",
-		desc: lang.PHOTO_DESC
-	},
-	async ({
-		m
-	}) => {
-		if (!m.quoted || !m.quoted.message.stickerMessage || m.quoted.message.stickerMessage.isAnimated) {
-			return await m.reply(lang.PHOTO_ALERT);
-		}
-		await m.react('☠️');
-		await m.sendMsg(m.jid, await m.quoted.download(), {
-			quoted: m
-		}, "image");
-		return await m.react('🍻');
-	});
-
-	Sparky(
-		{
-			name: "tts",
-			fromMe: isPublic,
-			category: "converters",
-			desc: "text to speech"
-		},
-		async ({
-			m, client, args
-		}) => {
-			if (!args) {
-				m.reply('_Enter Query!_')
-			} else {
-				let [txt,
-					lang] = args.split`:`
-				const audio = googleTTS.getAudioUrl(`${txt}`, {
-					lang: lang || "ml",
-					slow: false,
-					host: "https://translate.google.com",
-				})
-				client.sendMessage(m.jid, {
-					audio: {
-						url: audio,
-					},
-					mimetype: 'audio/mpeg',
-					ptt: false,
-					fileName: `${'tts'}.mp3`,
-				}, {
-					quoted: m,
-				})
-	
-			}
-		});
-
-Sparky(
-  {
-    name: "doc",
+    name: "clearimg",
     fromMe: isPublic,
     category: "converters",
-    desc: "Convert replied media to document",
-  },
-  async ({ m, client, args }) => {
-    try {
-      if (
-        !m.quoted ||
-        !(
-          m.quoted.message.imageMessage ||
-          m.quoted.message.videoMessage ||
-          m.quoted.message.audioMessage ||
-          m.quoted.message.documentMessage ||
-          m.quoted.message.stickerMessage
-        )
-      ) {
-        return await m.reply("This isn't a doc my nigga");
-      }
+    desc: "Clear stored images",
+}, async ({ m }) => {
+    pdfStore[m.jid] = [];
+    m.reply("🗑️ Cleared stored images");
+});
 
-      await m.react("☠️");
-
-      const buffer = await m.quoted.download();
-
-      // Detect mimetype properly
-      const mimetype =
-        m.quoted.message.imageMessage?.mimetype ||
-        m.quoted.message.videoMessage?.mimetype ||
-        m.quoted.message.audioMessage?.mimetype ||
-        m.quoted.message.documentMessage?.mimetype ||
-        "application/octet-stream";
-
-      let filename = args || "file";
-
-      if (!filename.includes(".")) {
-        const ext = mimetype.split("/")[1] || "bin";
-        filename += `.${ext}`;
-      }
-
-      await client.sendMessage(
-        m.jid,
-        {
-          document: buffer,
-          mimetype,
-          fileName: filename,
-        },
-        { quoted: m }
-      );
-
-      await m.react("🍻");
-
-    } catch (err) {
-      console.log(err);
-      await m.react("❌");
-      m.reply("Error converting media 😅");
-    }
-  }
-);
-Sparky(
-  {
-    name: "returnog",
+Sparky({
+    name: "cleartext",
     fromMe: isPublic,
     category: "converters",
-    desc: "Return document back to original media",
-  },
-  async ({ m, client }) => {
+    desc: "Clear stored text + images",
+}, async ({ m }) => {
+    pdfStore[m.jid] = [];
+    m.reply("🗑️ Cleared all PDF content");
+});
+
+Sparky({
+    name: "addpdf",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Add PDF to merge list",
+}, async ({ m }) => {
+
+    if (!m.quoted || !m.quoted.message.documentMessage) {
+        return m.reply("❌ Reply to a PDF file");
+    }
+
+    const mime = m.quoted.message.documentMessage.mimetype;
+    if (!mime.includes("pdf")) {
+        return m.reply("❌ Only PDF files allowed");
+    }
+
+    await m.react("☠️");
+
+    const buffer = await m.quoted.download();
+
+    if (!mergePdfStore[m.jid]) mergePdfStore[m.jid] = [];
+
+    mergePdfStore[m.jid].push(buffer);
+
+    await m.react("🍻");
+    m.reply(`📄 PDF added (${mergePdfStore[m.jid].length})`);
+});
+
+Sparky({
+    name: "mergepdf",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Merge added PDFs",
+}, async ({ m, client }) => {
+
+    const files = mergePdfStore[m.jid];
+
+    if (!files || files.length < 2) {
+        return m.reply("❌ Need at least 2 PDFs");
+    }
+
     try {
-      const quoted = m.quoted;
+        await m.react("☠️");
 
-      if (!quoted || !quoted.message?.documentMessage)
-        return m.reply("Reply to a document message bro");
+        const mergedPdf = await PDFLib.create();
 
-      const mime = quoted.message.documentMessage.mimetype;
 
-      const buffer = await quoted.download();
+        for (let file of files) {
+            const pdf = await PDFLib.load(file);
+            const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
 
-      let type = "document";
-      if (mime.startsWith("image")) type = "image";
-      else if (mime.startsWith("video")) type = "video";
-      else if (mime.startsWith("audio")) type = "audio";
+            pages.forEach((page) => mergedPdf.addPage(page));
+        }
 
-      await m.sendMsg(
-        m.jid,
-        buffer,
-        { mimetype: mime, quoted: m },
-        type
-      );
+        const mergedBytes = await mergedPdf.save();
+
+        await client.sendMessage(
+            m.jid,
+            {
+                document: Buffer.from(mergedBytes),
+                mimetype: "application/pdf",
+                fileName: "xbotmdmerged.pdf"
+            },
+            { quoted: m }
+        );
+
+        mergePdfStore[m.jid] = [];
+
+        await m.react("🍻");
 
     } catch (err) {
-      console.log(err);
-      m.reply("Error restoring media 😅");
+        console.log(err);
+        await m.react("❌");
+        m.reply("Error merging PDFs 😅");
     }
-  }
-);
+});
 
+Sparky({
+    name: "clearpdf",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Clear stored PDFs",
+}, async ({ m }) => {
+    mergePdfStore[m.jid] = [];
+    m.reply("🗑️ Cleared stored PDFs");
+});
 
-Sparky(
-		{
-			name: "say",
-			fromMe: isPublic,
-			category: "converters",
-			desc: "text to speech"
-		},
-		async ({
-			m, client, args
-		}) => {
-			if (!args) {
-				m.reply('_Enter Query!_')
-			} else {
-				let [txt,
-					lang] = args.split`:`
-				const audio = googleTTS.getAudioUrl(`${txt}`, {
-					lang: lang || "en",
-					slow: false,
-					host: "https://translate.google.com",
-				})
-				client.sendMessage(m.jid, {
-					audio: {
-						url: audio,
-					},
-					mimetype: 'audio/mpeg',
-					ptt: true,
-					fileName: `${'tts'}.mp3`,
-				}, {
-					quoted: m,
-				})
-	
-			}
-		});
+Sparky({
+    name: "pdfstart",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Start PDF editing session"
+}, async ({ m }) => {
+
+    if (!m.quoted || !m.quoted.message.documentMessage)
+        return m.reply("❌ Reply to a PDF");
+
+    const mime = m.quoted.message.documentMessage.mimetype;
+    if (!mime.includes("pdf"))
+        return m.reply("❌ Not a PDF");
+
+    try {
+        await m.react("☠️");
+
+        const buffer = await m.quoted.download();
+        const pdfDoc = await PDFEditor.load(buffer);
+
+        pdfEditStore[m.jid] = {
+        doc: pdfDoc,
+        cursor: {} 
+        };
+
+        await m.react("🍻");
+m.reply(`╭━━━〔 𝙋𝘿𝙁 𝙀𝘿𝙄𝙏𝙊𝙍 〕━━━⬣
+┃
+┃  ⚡ STATUS : ACTIVE
+┃  📄 PAGES  : ${pdfDoc.getPageCount()}
+┃
+┣━━━〔  TEXT 〕━━━⬣
+┃  write <page> "text"
+┃  ➤ Auto adds at top 
+┃
+┣━━━〔  IMAGE 〕━━━⬣
+┃  pdfimg <page> <x> <y> [w] [h]
+┃
+┃   ALIGNMENT SHORTCUTS:
+┃   center        → x:150  y:350
+┃   left-center   → x:20   y:350
+┃   right-center  → x:300  y:350
+┃   top-left      → x:20   y:700
+┃   top-right     → x:300  y:700
+┃   bottom-left   → x:20   y:50
+┃   bottom-right  → x:300  y:50
+┃   top-center    → x:150  y:700
+┃   bottom-center → x:150  y:50
+┃   full          → x:0    y:0   w:600 h:800
+┃
+┣━━━〔 EDIT 〕━━━⬣
+┃   delpage <page>
+┃
+┣━━━〔 SAVE 〕━━━⬣
+┃  returnpdf
+┃  cancelpdf
+┃
+╰━━━━━━━━━━━━━━━━━━⬣`);
+    } catch (err) {
+        console.log(err);
+        await m.react("❌");
+        m.reply("Error loading PDF");
+    }
+});
+
+Sparky({
+    name: "write",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Top-aligned clean text writer"
+}, async ({ m, args }) => {
+
+    if (!pdfEditStore[m.jid])
+        return m.reply(" Start with pdfstart");
+    const match = args.match(/^(\d+)\s+"([\s\S]+)"$/);
+    if (!match)
+        return m.reply('Usage:\nwrite 1 "your full text here"');
+    const pageNum = parseInt(match[1]);
+    const text = match[2]; 
+    try {
+        const store = pdfEditStore[m.jid];
+        const pdfDoc = store.doc;
+        let pageIndex = pageNum - 1;
+        if (isNaN(pageIndex) || pageIndex < 0)
+            return m.reply(" Invalid page");
+        while (pdfDoc.getPageCount() <= pageIndex) {
+            pdfDoc.addPage();
+        }
+
+        const pages = pdfDoc.getPages();
+        const page = pages[pageIndex];
+        if (!page) return m.reply("Page error");
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const fontSize = 16;
+        const lineHeight = 22;
+        const { width, height } = page.getSize();
+        const marginX = 50;
+        const marginY = height - 50;
+        const maxWidth = width - 100;
+        let y = marginY;
+        const lines = text.split("\n");
+        for (let rawLine of lines) {
+            let words = rawLine.split(" ");
+            let line = "";
+            for (let word of words) {
+                let testLine = line + word + " ";
+                let textWidth = font.widthOfTextAtSize(testLine, fontSize);
+                if (textWidth > maxWidth) {
+                    page.drawText(line, {
+                        x: marginX,
+                        y: y,
+                        size: fontSize,
+                        font,
+                        color: rgb(0, 0, 0),
+                    });
+                    line = word + " ";
+                    y -= lineHeight;
+                    if (y < 50) {
+                        pdfDoc.addPage();
+                        const newPages = pdfDoc.getPages();
+                        const newPage = newPages[newPages.length - 1];
+                        y = newPage.getSize().height - 50;
+                        page = newPage;
+                    }
+
+                } else {
+                    line = testLine;
+                }
+            }
+            if (line) {
+                page.drawText(line, {
+                    x: marginX,
+                    y: y,
+                    size: fontSize,
+                    font,
+                    color: rgb(0, 0, 0),
+                });
+
+                y -= lineHeight;
+            }
+        }
+
+        m.reply("➤ Text added ");
+
+    } catch (err) {
+        console.log(err);
+        m.reply("Error writing text");
+    }
+});
+Sparky({
+    name: "pdfimg",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Smart image insert (editor mode)"
+}, async ({ m, args }) => {
+
+    if (!pdfEditStore[m.jid])
+        return m.reply(" Start with pdfstart");
+
+    if (!m.quoted || !m.quoted.message.imageMessage)
+        return m.reply(" Reply to image");
+
+    let [pageNum, width, height] = args.split(" ");
+
+    if (!pageNum)
+        return m.reply(`Usage:
+pdfimg <page>
+pdfimg <page> <width> <height>`);
+
+    try {
+        const store = pdfEditStore[m.jid];
+        const pdfDoc = store.doc;
+        let pageIndex = parseInt(pageNum) - 1;
+        while (pdfDoc.getPageCount() <= pageIndex) {
+            pdfDoc.addPage();
+        }
+
+        let page = pdfDoc.getPages()[pageIndex];
+        const imgBuffer = await m.quoted.download();
+        let image;
+        try {
+            image = await pdfDoc.embedJpg(imgBuffer);
+        } catch {
+            image = await pdfDoc.embedPng(imgBuffer);
+        }
+
+        const imgDims = image.scale(1);
+        const finalWidth = width ? parseInt(width) : imgDims.width;
+        const finalHeight = height ? parseInt(height) : imgDims.height;
+        const { height: pageHeight } = page.getSize();
+        if (!store.imgCursor) store.imgCursor = {};
+        if (!store.imgCursor[pageIndex]) {
+            store.imgCursor[pageIndex] = pageHeight - 50;
+        }
+        let y = store.imgCursor[pageIndex];
+        if (y - finalHeight < 50) {
+            pdfDoc.addPage();
+            pageIndex++;
+            page = pdfDoc.getPages()[pageIndex];
+            store.imgCursor[pageIndex] = page.getSize().height - 50;
+            y = store.imgCursor[pageIndex];
+        }
+
+        page.drawImage(image, {
+            x: 50,
+            y: y - finalHeight,
+            width: finalWidth,
+            height: finalHeight
+        });
+
+        store.imgCursor[pageIndex] = y - finalHeight - 20;
+
+        m.reply("➤ Image added");
+
+    } catch (err) {
+        console.log(err);
+        m.reply("Error adding image");
+    }
+});
+
+Sparky({
+    name: "delpage",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Delete page"
+}, async ({ m, args }) => {
+
+    if (!pdfEditStore[m.jid])
+        return m.reply(" Start with pdfstart");
+
+    const pageNum = parseInt(args);
+
+    if (!pageNum)
+        return m.reply("Usage: pdfdelpage 2");
+
+    try {
+        const pdfDoc = pdfEditStore[m.jid].doc;
+
+        if (pageNum > pdfDoc.getPageCount())
+            return m.reply(" Page not found");
+
+        pdfDoc.removePage(pageNum - 1);
+
+        m.reply("➤ Page Deleted");
+
+    } catch (err) {
+        console.log(err);
+        m.reply("Error deleting page");
+    }
+});
+
+Sparky({
+    name: "returnpdf",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Save edited PDF"
+}, async ({ m, client }) => {
+
+    if (!pdfEditStore[m.jid])
+        return m.reply(" No active session");
+
+    try {
+        await m.react("☠️");
+
+        const pdfDoc = pdfEditStore[m.jid].doc;
+        const newPdf = await pdfDoc.save();
+
+        await client.sendMessage(m.jid, {
+            document: Buffer.from(newPdf),
+            mimetype: "application/pdf",
+            fileName: "edited.pdf"
+        }, { quoted: m });
+
+        delete pdfEditStore[m.jid];
+
+        await m.react("🍻");
+
+    } catch (err) {
+        console.log(err);
+        await m.react("❌");
+        m.reply("Error saving PDF");
+    }
+});
+
+Sparky({
+    name: "cancelpdf",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Cancel PDF editing"
+}, async ({ m }) => {
+    delete pdfEditStore[m.jid];
+    m.reply("PDF Neutrilized");
+});
