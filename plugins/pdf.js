@@ -35,7 +35,7 @@ Sparky({
     });
 
     await m.react("🍻");
-    m.reply(`🖼️ Image added (${pdfStore[m.jid].length})`);
+    m.reply(`✦ Image Added (${pdfStore[m.jid].length})`);
 });
 
 Sparky({
@@ -56,7 +56,7 @@ Sparky({
         content: text
     });
 
-    m.reply(`📝 Text added (${pdfStore[m.jid].length})`);
+    m.reply(`✦ Text Added  (${pdfStore[m.jid].length})`);
 });
 
 Sparky({
@@ -129,7 +129,7 @@ Sparky({
     desc: "Clear stored images",
 }, async ({ m }) => {
     pdfStore[m.jid] = [];
-    m.reply("🗑️ Cleared stored images");
+    m.reply("➤ Cleared stored images ");
 });
 
 Sparky({
@@ -139,7 +139,7 @@ Sparky({
     desc: "Clear stored text + images",
 }, async ({ m }) => {
     pdfStore[m.jid] = [];
-    m.reply("🗑️ Cleared all PDF content");
+    m.reply("➤ Cleared all PDF content");
 });
 
 Sparky({
@@ -150,12 +150,12 @@ Sparky({
 }, async ({ m }) => {
 
     if (!m.quoted || !m.quoted.message.documentMessage) {
-        return m.reply("❌ Reply to a PDF file");
+        return m.reply(" Reply to a PDF file");
     }
 
     const mime = m.quoted.message.documentMessage.mimetype;
     if (!mime.includes("pdf")) {
-        return m.reply("❌ Only PDF files allowed");
+        return m.reply(" Only PDF files allowed");
     }
 
     await m.react("☠️");
@@ -180,7 +180,7 @@ Sparky({
     const files = mergePdfStore[m.jid];
 
     if (!files || files.length < 2) {
-        return m.reply("❌ Need at least 2 PDFs");
+        return m.reply(" Need at least 2 PDFs");
     }
 
     try {
@@ -226,7 +226,7 @@ Sparky({
     desc: "Clear stored PDFs",
 }, async ({ m }) => {
     mergePdfStore[m.jid] = [];
-    m.reply("🗑️ Cleared stored PDFs");
+    m.reply("➤ Cleared stored PDFs");
 });
 
 Sparky({
@@ -237,7 +237,7 @@ Sparky({
 }, async ({ m }) => {
 
     if (!m.quoted || !m.quoted.message.documentMessage)
-        return m.reply("❌ Reply to a PDF");
+        return m.reply(" Reply to a PDF");
 
     const mime = m.quoted.message.documentMessage.mimetype;
     if (!mime.includes("pdf"))
