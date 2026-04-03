@@ -36,7 +36,7 @@ Sparky({
     });
 
     await m.react("🍻");
-    m.reply(`🖼️ Image added (${pdfStore[m.jid].length})`);
+    m.reply(`➤ Image added (${pdfStore[m.jid].length})`);
 });
 
 Sparky({
@@ -57,7 +57,7 @@ Sparky({
         content: text
     });
 
-    m.reply(`📝 Text added (${pdfStore[m.jid].length})`);
+    m.reply(`➤ Text added (${pdfStore[m.jid].length})`);
 });
 
 Sparky({
@@ -130,7 +130,7 @@ Sparky({
     desc: "Clear stored images",
 }, async ({ m }) => {
     pdfStore[m.jid] = [];
-    m.reply("🗑️ Cleared stored images");
+    m.reply("➤ Cleared stored images");
 });
 
 Sparky({
@@ -140,11 +140,11 @@ Sparky({
     desc: "Clear stored text + images",
 }, async ({ m }) => {
     pdfStore[m.jid] = [];
-    m.reply("🗑️ Cleared all PDF content");
+    m.reply("➤ Cleared all PDF content");
 });
 
 Sparky({
-    name: "addpdf",
+    name: "add",
     fromMe: isPublic,
     category: "converters",
     desc: "Add PDF to merge list",
@@ -168,11 +168,11 @@ Sparky({
     mergePdfStore[m.jid].push(buffer);
 
     await m.react("🍻");
-    m.reply(`📄 PDF added (${mergePdfStore[m.jid].length})`);
+    m.reply(`➤ PDF added (${mergePdfStore[m.jid].length})`);
 });
 
 Sparky({
-    name: "mergepdf",
+    name: "merge",
     fromMe: isPublic,
     category: "converters",
     desc: "Merge added PDFs",
@@ -221,13 +221,57 @@ Sparky({
 });
 
 Sparky({
-    name: "clearpdf",
+    name: "split",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Split PDF pages (range)"
+}, async ({ m, client, args }) => {
+    if (!m.quoted || !m.quoted.message.documentMessage)
+        return m.reply("❌ Reply to a PDF");
+    const mime = m.quoted.message.documentMessage.mimetype;
+    if (!mime.includes("pdf"))
+        return m.reply("❌ Only PDF allowed");
+    if (!args.includes(";"))
+        return m.reply("Usage:\nsplit 1;5");
+    try {
+        await m.react("☠️");
+        let [start, end] = args.split(";").map(n => parseInt(n));
+        if (!start || !end || start < 1 || end < start)
+            return m.reply("❌ Invalid range");
+        const buffer = await m.quoted.download();
+        const pdfDoc = await PDFEditor.load(buffer);
+        const totalPages = pdfDoc.getPageCount();
+        if (end > totalPages) end = totalPages;
+        const newPdf = await PDFEditor.create();
+        const pagesToCopy = [];
+        for (let i = start - 1; i < end; i++) {
+            pagesToCopy.push(i);
+        }
+        const copiedPages = await newPdf.copyPages(pdfDoc, pagesToCopy);
+        copiedPages.forEach(p => newPdf.addPage(p));
+        const pdfBytes = await newPdf.save();
+        await client.sendMessage(m.jid, {
+            document: Buffer.from(pdfBytes),
+            mimetype: "application/pdf",
+            fileName: `xbotmdsplitted.pdf`
+        }, { quoted: m });
+        await m.react("🍻");
+
+    } catch (err) {
+        console.log(err);
+        await m.react("❌");
+        m.reply("Error splitting PDF");
+    }
+});
+
+Sparky({
+    name: "clear",
     fromMe: isPublic,
     category: "converters",
     desc: "Clear stored PDFs",
 }, async ({ m }) => {
     mergePdfStore[m.jid] = [];
-    m.reply("🗑️ Cleared stored PDFs");
+    m.reply("➤ Cleared stored PDFs");
 });
 
 Sparky({
@@ -236,20 +280,16 @@ Sparky({
     category: "converters",
     desc: "Start PDF editing session"
 }, async ({ m }) => {
-
     if (!m.quoted || !m.quoted.message.documentMessage)
         return m.reply("❌ Reply to a PDF");
-
     const mime = m.quoted.message.documentMessage.mimetype;
     if (!mime.includes("pdf"))
         return m.reply("❌ Not a PDF");
 
     try {
         await m.react("☠️");
-
         const buffer = await m.quoted.download();
         const pdfDoc = await PDFEditor.load(buffer);
-
         pdfEditStore[m.jid] = {
         doc: pdfDoc,
         cursor: {} 
@@ -385,15 +425,11 @@ Sparky({
     category: "converters",
     desc: "Smart image insert (editor mode)"
 }, async ({ m, args }) => {
-
     if (!pdfEditStore[m.jid])
         return m.reply("❌ Start with pdfstart");
-
     if (!m.quoted || !m.quoted.message.imageMessage)
         return m.reply("❌ Reply to image");
-
     let [pageNum, width, height] = args.split(" ");
-
     if (!pageNum)
         return m.reply(`Usage:
 pdfimg <page>
@@ -415,7 +451,6 @@ pdfimg <page> <width> <height>`);
         } catch {
             image = await pdfDoc.embedPng(imgBuffer);
         }
-
         const imgDims = image.scale(1);
         const finalWidth = width ? parseInt(width) : imgDims.width;
         const finalHeight = height ? parseInt(height) : imgDims.height;
@@ -459,22 +494,15 @@ Sparky({
 
     if (!pdfEditStore[m.jid])
         return m.reply(" Start with pdfstart");
-
     const pageNum = parseInt(args);
-
     if (!pageNum)
         return m.reply("Usage: pdfdelpage 2");
-
     try {
         const pdfDoc = pdfEditStore[m.jid].doc;
-
         if (pageNum > pdfDoc.getPageCount())
             return m.reply(" Page not found");
-
         pdfDoc.removePage(pageNum - 1);
-
         m.reply("➤ Page Deleted");
-
     } catch (err) {
         console.log(err);
         m.reply("Error deleting page");
@@ -515,7 +543,6 @@ Sparky({
         }, { quoted: m });
 
         delete pdfEditStore[m.jid];
-
         await m.react("🍻");
 
     } catch (err) {
@@ -526,11 +553,12 @@ Sparky({
 });
 
 Sparky({
-    name: "cancelpdf",
+    name: "cancel",
     fromMe: isPublic,
     category: "converters",
     desc: "Cancel PDF editing"
 }, async ({ m }) => {
     delete pdfEditStore[m.jid];
-    m.reply("PDF Neutrilized");
+    m.reply("PDF Neutrilized ➤");
 });
+
