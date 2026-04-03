@@ -5,7 +5,12 @@ const config = require('../config.js');
 const lang = getString('converters');
 const fs = require("fs");
 const PDFDocument = require("pdfkit"); 
-const { PDFDocument: PDFLib } = require("pdf-lib"); 
+const { PDFDocument: PDFLib } = require("pdf-lib");
+const Tesseract = require("tesseract.js");
+const axios = require("axios");
+
+
+
 
 Sparky({
     name: "url",
@@ -223,18 +228,14 @@ Sparky(
       }
 
       await m.react("☠️");
-
       const buffer = await m.quoted.download();
-
-      // Detect mimetype properly
       const mimetype =
         m.quoted.message.imageMessage?.mimetype ||
         m.quoted.message.videoMessage?.mimetype ||
         m.quoted.message.audioMessage?.mimetype ||
         m.quoted.message.documentMessage?.mimetype ||
         "application/octet-stream";
-
-      let filename = args || "file";
+      let filename = args || "xbotmd";
 
       if (!filename.includes(".")) {
         const ext = mimetype.split("/")[1] || "bin";
@@ -270,19 +271,14 @@ Sparky(
   async ({ m, client }) => {
     try {
       const quoted = m.quoted;
-
       if (!quoted || !quoted.message?.documentMessage)
         return m.reply("Reply to a document message bro");
-
       const mime = quoted.message.documentMessage.mimetype;
-
       const buffer = await quoted.download();
-
       let type = "document";
       if (mime.startsWith("image")) type = "image";
       else if (mime.startsWith("video")) type = "video";
       else if (mime.startsWith("audio")) type = "audio";
-
       await m.sendMsg(
         m.jid,
         buffer,
@@ -331,3 +327,80 @@ Sparky(
 	
 			}
 		});
+
+
+Sparky({
+    name: "returntext",
+    fromMe: isPublic,
+    category: "ai",
+    desc: "Extract formatted text (OCR.space + fallback)"
+}, async ({ m, client }) => {
+    if (!m.quoted || !m.quoted.message.imageMessage)
+        return m.reply("❌ Reply to an image");
+    try {
+        await m.react("☠️");
+        const buffer = await m.quoted.download();
+        let text = "";
+        try {
+            const res = await axios.post(
+                "https://api.ocr.space/parse/image",
+                {
+                    base64Image: "data:image/jpeg;base64," + buffer.toString("base64"),
+                    language: "eng",
+                    isOverlayRequired: false
+                },
+                {
+                    headers: {
+                        apikey: "helloworld"
+                    },
+                    timeout: 15000
+                }
+            );
+            text = res.data?.ParsedResults?.[0]?.ParsedText || "";
+        } catch (err) {
+            console.log("OCR.space failed → fallback");
+        }
+        if (!text || !text.trim()) {
+            const { data } = await Tesseract.recognize(buffer, "eng");
+            text = data.text;
+        }
+        if (!text || !text.trim())
+            return m.reply("❌ No text found");
+        function formatText(input) {
+            return input
+                .replace(/\r/g, "")
+                .replace(/[ \t]+/g, " ")
+                .replace(/\n{3,}/g, "\n\n")
+                .replace(/([a-z])\n([a-z])/g, "$1 $2")
+                .replace(/\s+([.,!?])/g, "$1")
+                .split("\n")
+                .map(line => {
+                    let l = line.trim();
+                    if (!l) return "";
+                    if (l.length < 40 && /^[A-Z0-9\s]+$/.test(l)) {
+                        return `\n🔹 ${l}\n`;
+                    }
+
+                    return l;
+                })
+                .join("\n")
+                .trim();
+        }
+        const cleanText = formatText(text);
+        await m.react("🍻");
+        if (cleanText.length > 4000) {
+            const filePath = "./ocr.txt";
+            fs.writeFileSync(filePath, cleanText);
+            return await client.sendMessage(m.jid, {
+                document: fs.readFileSync(filePath),
+                mimetype: "text/plain",
+                fileName: "ocr.txt"
+            }, { quoted: m });
+        }
+        await m.reply(`➤ RESULT:\n\n${cleanText}`);
+    } catch (err) {
+        console.log(err);
+        await m.react("❌");
+        m.reply("Error extracting text 😅");
+    }
+});
