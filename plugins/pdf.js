@@ -292,7 +292,8 @@ Sparky({
         const pdfDoc = await PDFEditor.load(buffer);
         pdfEditStore[m.jid] = {
         doc: pdfDoc,
-        cursor: {} 
+        cursor: {},
+        deleteQueue:[]
         };
 
         await m.react("🍻");
@@ -489,23 +490,75 @@ Sparky({
     name: "delpage",
     fromMe: isPublic,
     category: "converters",
-    desc: "Delete page"
+    desc: "Queue page deletion"
 }, async ({ m, args }) => {
-
     if (!pdfEditStore[m.jid])
         return m.reply(" Start with pdfstart");
     const pageNum = parseInt(args);
     if (!pageNum)
-        return m.reply("Usage: pdfdelpage 2");
+        return m.reply("Usage: delpage 2");
+    const store = pdfEditStore[m.jid];
+    const totalPages = store.doc.getPageCount();
+    if (pageNum < 1 || pageNum > totalPages)
+        return m.reply(" Page not found");
+    if (!store.deleteQueue.includes(pageNum)) {
+        store.deleteQueue.push(pageNum);
+    }
+    m.reply(`➤ Page ${pageNum} marked for deletion`);
+});
+
+Sparky({
+    name: "delrange",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Delete range of pages"
+}, async ({ m, args }) => {
+    if (!pdfEditStore[m.jid])
+        return m.reply(" Start with pdfstart");
+    const match = args.match(/^(\d+);(\d+)$/);
+    if (!match)
+        return m.reply("Usage: delrange 1;10");
+    let start = parseInt(match[1]);
+    let end = parseInt(match[2]);
+    if (start > end) [start, end] = [end, start];
+    const store = pdfEditStore[m.jid];
+    const total = store.doc.getPageCount();
+    if (start < 1 || end > total)
+        return m.reply(" Invalid page range");
+    if (!store.deleteQueue) store.deleteQueue = [];
+    for (let i = start; i <= end; i++) {
+        if (!store.deleteQueue.includes(i)) {
+            store.deleteQueue.push(i);
+        }
+    }
+    m.reply(`➤ Pages ${start} → ${end} marked for deletion`);
+});
+
+Sparky({
+    name: "extract",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Extract page range (use returnpdf to get file)"
+}, async ({ m, args }) => {
+    if (!pdfEditStore[m.jid])
+        return m.reply("❌ Start with pdfstart");
+    if (!args.includes(";"))
+        return m.reply("Usage: extract 1;5");
     try {
+        const [start, end] = args.split(";").map(n => parseInt(n));
+        if (!start || !end || start > end)
+            return m.reply("❌ Invalid range");
         const pdfDoc = pdfEditStore[m.jid].doc;
-        if (pageNum > pdfDoc.getPageCount())
-            return m.reply(" Page not found");
-        pdfDoc.removePage(pageNum - 1);
-        m.reply("➤ Page Deleted");
+        if (end > pdfDoc.getPageCount())
+            return m.reply("❌ Range exceeds pages");
+        pdfEditStore[m.jid].extractRange = {
+            start,
+            end
+        };
+        m.reply(`➤ Extract range set`);
     } catch (err) {
         console.log(err);
-        m.reply("Error deleting page");
+        m.reply("Error setting extract range");
     }
 });
 
@@ -515,19 +568,38 @@ Sparky({
     category: "converters",
     desc: "Save edited PDF"
 }, async ({ m, client, args }) => {
-
     if (!pdfEditStore[m.jid])
         return m.reply(" No active session");
-
     try {
         await m.react("☠️");
-
-        const pdfDoc = pdfEditStore[m.jid].doc;
-        const newPdf = await pdfDoc.save();
+        let pdfDoc = pdfEditStore[m.jid].doc;
+        const store = pdfEditStore[m.jid];
+        if (store.extractRange) {
+        const { start, end } = store.extractRange;
+        const newDoc = await PDFEditor.create();
+        const indexes = [];
+        for (let i = start - 1; i <= end - 1; i++) {
+        indexes.push(i);
+        }
+        const pages = await newDoc.copyPages(pdfDoc, indexes);
+        pages.forEach(p => newDoc.addPage(p));
+        pdfDoc = newDoc;
+        }
+        if (store.deleteQueue && store.deleteQueue.length > 0) {
+            const newDoc = await PDFEditor.create();
+            const deleteIndexes = store.deleteQueue
+                .map(p => p - 1)
+                .sort((a, b) => b - a);
+            const keepIndexes = pdfDoc.getPageIndices()
+                .filter(i => !deleteIndexes.includes(i));
+            const pages = await newDoc.copyPages(pdfDoc, keepIndexes);
+            pages.forEach(p => newDoc.addPage(p));
+            pdfDoc = newDoc;
+        }
+        const finalBytes = await pdfDoc.save();
         let fileName = "xbotmdedited.pdf";
         if (args) {
             const match = args.match(/"(.+?)"/);
-
             if (match) {
                 fileName = match[1];
                 if (!fileName.toLowerCase().endsWith(".pdf")) {
@@ -535,16 +607,13 @@ Sparky({
                 }
             }
         }
-
         await client.sendMessage(m.jid, {
-            document: Buffer.from(newPdf),
+            document: Buffer.from(finalBytes),
             mimetype: "application/pdf",
             fileName: fileName
         }, { quoted: m });
-
         delete pdfEditStore[m.jid];
         await m.react("🍻");
-
     } catch (err) {
         console.log(err);
         await m.react("❌");
