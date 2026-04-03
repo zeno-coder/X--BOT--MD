@@ -39,6 +39,7 @@
     "qs": "latest",
     "sequelize": "^6.23.0",
     "simple-git": "^3.27.0",
-    "sqlite3": "^5.1.6"
+    "sqlite3": "^5.1.6",
+    "tesseract.js": "^7.0.0"
   }
 }
