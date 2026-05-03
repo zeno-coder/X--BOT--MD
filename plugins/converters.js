@@ -8,6 +8,11 @@ const PDFDocument = require("pdfkit");
 const { PDFDocument: PDFLib } = require("pdf-lib");
 const Tesseract = require("tesseract.js");
 const axios = require("axios");
+const ffmpeg = require("fluent-ffmpeg");
+const ffmpegPath = require("ffmpeg-static");
+const ffprobePath = require("ffprobe-static").path;
+ffmpeg.setFfprobePath(ffprobePath);
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 
 
@@ -403,4 +408,178 @@ Sparky({
         await m.react("❌");
         m.reply("Error extracting text 😅");
     }
+});
+
+Sparky({
+    name: "trim",
+    fromMe: true,
+    category: "converters",
+    desc: "Trim audio (reply with start;end in seconds)"
+}, async ({ m, args }) => {
+
+    if (!m.quoted || !m.quoted.message.audioMessage)
+        return m.reply("Reply to an audio");
+
+    if (!args.includes(";"))
+        return m.reply("Use format: trim start;end (e.g., trim 0;30)");
+
+    const [start, end] = args.split(";").map(Number);
+
+    if (isNaN(start) || isNaN(end))
+        return m.reply("Invalid numbers");
+
+    try {
+        await m.react("☠️");
+
+        const input = "./input.mp3";
+        const output = "./trimmed.mp3";
+
+        const buffer = await m.quoted.download();
+        fs.writeFileSync(input, buffer);
+
+        await new Promise((resolve, reject) => {
+            ffmpeg(input)
+                .setStartTime(start)
+                .setDuration(end - start)
+                .output(output)
+                .on("end", resolve)
+                .on("error", reject)
+                .run();
+        });
+
+        await m.sendMsg(m.jid, fs.readFileSync(output), {
+            mimetype: "audio/mpeg",
+            quoted: m
+        }, "audio");
+
+        fs.unlinkSync(input);
+        fs.unlinkSync(output);
+
+        await m.react("🍻");
+
+    } catch (err) {
+        console.log(err);
+        await m.react("❌");
+        m.reply("Trim failed");
+    }
+});
+
+const audioQueue = {};
+Sparky({
+    name: "addmp3",
+    fromMe: true,
+    category: "converters",
+    desc: "Add audio to merge queue"
+}, async ({ m }) => {
+
+    if (!m.quoted || !m.quoted.message.audioMessage)
+        return m.reply("Reply to an audio");
+
+    try {
+        await m.react("☠️");
+
+        const buffer = await m.quoted.download();
+
+        if (!audioQueue[m.jid]) audioQueue[m.jid] = [];
+
+        audioQueue[m.jid].push(buffer);
+
+        await m.react("🍻");
+        m.reply(`➤ Added to queue (${audioQueue[m.jid].length})`);
+
+    } catch (err) {
+        console.log(err);
+        await m.react("❌");
+    }
+});
+
+Sparky({
+    name: "showmp3",
+    fromMe: true,
+    category: "converters",
+    desc: "Show audio queue"
+}, async ({ m }) => {
+
+    const q = audioQueue[m.jid] || [];
+
+    if (!q.length)
+        return m.reply("➤ Queue empty");
+
+    let msg = "╭━━━〔 audio queue 〕━━>\n┃\n";
+
+    q.forEach((_, i) => {
+        msg += `┃• track ${i + 1}\n`;
+    });
+
+    msg += "╰━━━━━━━━━━━━━>";
+
+    m.reply(msg);
+});
+
+Sparky({
+    name: "mergemp3",
+    fromMe: true,
+    category: "converters",
+    desc: "Merge all queued audios"
+}, async ({ m }) => {
+
+    const q = audioQueue[m.jid];
+
+    if (!q || q.length < 2)
+        return m.reply("Need at least 2 audios");
+
+    try {
+        await m.react("☠️");
+
+        const files = [];
+
+        // save all audios
+        q.forEach((buf, i) => {
+            const file = `./tmp_${i}.mp3`;
+            fs.writeFileSync(file, buf);
+            files.push(file);
+        });
+
+        const output = "./merged.mp3";
+
+        await new Promise((resolve, reject) => {
+            const command = ffmpeg();
+
+            files.forEach(f => command.input(f));
+
+            command
+                .on("error", reject)
+                .on("end", resolve)
+                .mergeToFile(output);
+        });
+
+        await m.sendMsg(
+            m.jid,
+            fs.readFileSync(output),
+            { mimetype: "audio/mpeg", quoted: m },
+            "audio"
+        );
+        files.forEach(f => fs.unlinkSync(f));
+        fs.unlinkSync(output);
+
+        delete audioQueue[m.jid];
+
+        await m.react("🍻");
+
+    } catch (err) {
+        console.log(err);
+        await m.react("❌");
+        m.reply("Merge failed");
+    }
+});
+
+Sparky({
+    name: "clearmp3",
+    fromMe: true,
+    category: "converters",
+    desc: "Clear audio queue"
+}, async ({ m }) => {
+
+    delete audioQueue[m.jid];
+    m.reply("➤ Queue cleared");
 });
