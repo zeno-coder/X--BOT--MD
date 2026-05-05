@@ -442,18 +442,17 @@ Sparky({
 
 Sparky({
 	name: "leave",
-	fromMe: true,
+	fromMe: isPublic,
 	desc: lang.LEAVE_DESC,
 	category: "group",
-}, async ({
-	client,
-	m
-}) => {
+}, async ({ client, m }) => {
 	if (!m.isGroup) return await m.reply(lang.NOT_GROUP);
-	await m.sendMsg(m.jid, lang.LEAVE_MSG);
+	const msg = lang.LEAVE_MSG || " Leaving group...";
+	await m.sendMsg(m.jid, msg);
+	await delay(1000);
+
 	return await client.groupLeave(m.jid);
 });
-
 
 Sparky({
 	name: "removegpp",
