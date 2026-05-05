@@ -472,33 +472,35 @@ Sparky({
 });
 
 
+const sharp = require("sharp");
+
 Sparky({
 	name: "gpp",
 	fromMe: true,
 	desc: lang.GPP_DESC,
 	category: "group",
-}, async ({ client, m, args }) => {
+}, async ({ client, m }) => {
 
 	if (!m.isGroup) return await m.reply(lang.NOT_GROUP);
 
 	if (!m.quoted) return await m.reply("❌ Reply to an image");
 
-	if (!m.quoted.message.imageMessage)
+	if (!m.quoted.message?.imageMessage)
 		return await m.reply("❌ Reply to a valid image");
 
 	try {
 		await m.react("☠️");
-
-		const buffer = await m.quoted.download();
-
-		// 🔥 THIS IS THE FIX
-		await client.updateProfilePicture(m.jid, { url: buffer });
-
-		await m.react("🍻");
-		return await m.reply("✅ Group profile updated");
+		let buffer = await m.quoted.download();
+		const img = await sharp(buffer)
+			.resize(640, 640, { fit: "cover" }) 
+			.jpeg({ quality: 80 })
+			.toBuffer();
+		await client.updateProfilePicture(m.jid, img);
+		await m.react("🎈");
+		return await m.reply("🍻 Group profile updated");
 
 	} catch (err) {
-		console.log(err);
+		console.log("GPP ERROR:", err);
 		await m.react("❌");
 		return await m.reply("❌ Failed to update group profile");
 	}
@@ -526,16 +528,26 @@ Sparky({
         } catch {
             pp = 'https://i.imgur.com/2wzGhpF.jpeg'; 
         }
-        const text = `
-┌──「 *INFO GROUP* 」
-▢ *♻️ID:* ${groupMetadata.id}
-▢ *🔖NAME:* ${groupMetadata.subject}
-▢ *👥Members:* ${participants.length}
-▢ *🤿Group Owner:* @${owner.split('@')[0]}
-▢ *🕵🏻‍♂️Admins:*
-${listAdmin}
-▢ *📌Description:* ${groupMetadata.desc?.toString() || 'No description'}
-        `.trim();
+const text = `
+╭━━━〔 group info 〕━━>
+┃╭──────────────◉
+┃┃ id : ${groupMetadata.id}
+┃┃ name : ${groupMetadata.subject}
+┃┃ members : ${participants.length}
+┃┃ owner : @${owner.split('@')[0]}
+┃╰──────────────◉
+┃
+┃╭──────── admins ────────◉
+${listAdmin 
+    ? listAdmin.split('\n').map(a => `┃┃ ${a}`).join('\n')
+    : '┃┃ none'}
+┃╰──────────────◉
+┃
+┃╭────── description ─────◉
+┃┃ ${groupMetadata.desc?.toString() || 'no description'}
+┃╰──────────────◉
+╰━━━━━━━━━━━━━━━>
+`.trim();
         await client.sendMessage(m.jid, {
             image: { url: pp },
             caption: text,
@@ -591,22 +603,32 @@ Sparky({
         return m.reply("⚠️ No data yet");
     }
 
-    let msg = "📊 *Message Stats*\n\n";
+let msg = `
+╭━━━〔 message stats 〕━━>
+┃╭──────────────◉
+`.trim() + "\n";
 
-    const now = Date.now();
+const now = Date.now();
+let i = 1;
 
-    for (const user in groupData) {
-        const data = groupData[user];
+for (const user in groupData) {
+    const data = groupData[user];
 
-        const last = data.time
-            ? Math.floor((now - data.time) / 1000) + "s ago"
-            : "never";
+    const last = data.time
+        ? Math.floor((now - data.time) / 1000) + "s ago"
+        : "never";
 
-        const number = user.split("@")[0].replace(/[^0-9]/g, '');
-msg += `👤 @${number}\n`;
-        msg += `📨 Total: ${data.total}\n`;
-        msg += `⏱️ Last: ${last}\n\n`;
-    }
+    const number = user.split("@")[0].replace(/[^0-9]/g, '');
+
+    msg += `┃┃ ${i++}. @${number}\n`;
+    msg += `┃┃ ├ msgs : ${data.total}\n`;
+    msg += `┃┃ └ last : ${last}\n`;
+    msg += `┃\n`;
+
+
+msg += `┃╰──────────────◉
+╰━━━━━━━━━━━━━━━>`;
+}
 
     return m.sendMsg(m.jid, msg, {
         mentions: Object.keys(groupData)
@@ -614,93 +636,3 @@ msg += `👤 @${number}\n`;
 });
 
 
-Sparky({
-    name: "antilink",
-    fromMe: isPublic,
-    category: "group",
-    desc: "Manage AntiLink system"
-}, async ({ m, args }) => {
-
-    if (!m.isGroup) return m.reply("❌ Group only command");
-
-    const antilink = await getAntiLink(m.jid, m.id);
-
-    const status = antilink?.enabled ? "on" : "off";
-    const action = antilink?.action || "null";
-    const allowedUrls = antilink?.allowedUrls && antilink.allowedUrls !== "null"
-        ? antilink.allowedUrls
-        : "";
-
-    if (!args) {
-        return m.reply(`📌 AntiLink Status: ${status}\nAction: ${action}`);
-    }
-
-    const cmd = args.split(" ")[0].toLowerCase();
-    const input = args.slice(cmd.length).trim();
-
-    try {
-
-        if (cmd === "on" || cmd === "off") {
-            await setAntiLink(m.jid, cmd === "on", m.id);
-            return m.reply(`✅ AntiLink turned ${cmd}`);
-        }
-
-        if (["kick", "warn", "delete", "null"].includes(cmd)) {
-            await setAntiLink(m.jid, cmd, m.id);
-            return m.reply(`⚙️ Action set to ${cmd}`);
-        }
-
-        if (cmd === "allow") {
-            if (!input) return m.reply("Give URLs (comma separated)");
-
-            const urls = input.split(",")
-                .map(u => normalizeUrl(u.trim()))
-                .filter(Boolean);
-
-            const current = allowedUrls ? allowedUrls.split(",") : [];
-            const updated = [...new Set([...current, ...urls])];
-
-            await setAllowedUrl(m.jid, updated.join(","), m.id);
-
-            return m.reply(`✅ Allowed URLs added:\n${urls.join("\n")}`);
-        }
-
-        if (cmd === "disallow") {
-            if (!input) return m.reply("Give URLs");
-
-            const urls = input.split(",")
-                .map(u => "!" + normalizeUrl(u.trim()))
-                .filter(Boolean);
-
-            const current = allowedUrls ? allowedUrls.split(",") : [];
-            const updated = [...new Set([...current, ...urls])];
-
-            await setAllowedUrl(m.jid, updated.join(","), m.id);
-
-            return m.reply(`🚫 Disallowed URLs:\n${urls.map(u => u.slice(1)).join("\n")}`);
-        }
-
-        if (cmd === "list" || cmd === "info") {
-            if (!allowedUrls) return m.reply("No URLs set");
-
-            const list = allowedUrls.split(",");
-            const allowed = list.filter(u => !u.startsWith("!"));
-            const blocked = list.filter(u => u.startsWith("!")).map(u => u.slice(1));
-
-            return m.reply(
-                `📌 AntiLink Info\n\nStatus: ${status}\nAction: ${action}\n\n✅ Allowed:\n${allowed.join("\n") || "None"}\n\n🚫 Blocked:\n${blocked.join("\n") || "None"}`
-            );
-        }
-
-        if (cmd === "clear") {
-            await setAllowedUrl(m.jid, "null", m.id);
-            return m.reply("🗑️ Cleared all AntiLink settings");
-        }
-
-        return m.reply("Invalid command");
-
-    } catch (err) {
-        console.log(err);
-        return m.reply("❌ Error in AntiLink");
-    }
-});
