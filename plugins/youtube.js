@@ -47,7 +47,7 @@ Sparky({
       await m.react('🍻');
     } catch (error) {
       await m.react('❌');
-      m.reply(error);
+      m.reply(error.message || String(error));
     }
   });
 
@@ -66,11 +66,23 @@ Sparky({
       if (!await isUrl(args)) return await m.reply(lang.INVALID_LINK);
       await m.react('☠️');
       const url = await yta(args);
-      await m.sendMsg(m.jid, url, { quoted: m, mimetype: 'audio/mpeg' }, "audio");
+      const response = await fetch(url);
+      const buffer = await response.buffer();
+      const mp3Buffer = await convertToMp3(buffer);
+      await m.sendMsg(
+        m.jid,
+        mp3Buffer,
+        {
+          quoted: m,
+          mimetype: 'audio/mpeg',
+          fileName: "audio.mp3"
+        },
+        "audio"
+      );
       await m.react('🍻');
     } catch (error) {
       await m.react('❌');
-      m.reply(error);
+      m.reply(error.message || String(error));
     }
   });
 
@@ -91,11 +103,23 @@ Sparky({
       await m.react('☠️');
       await m.reply(`Downloading ${play.title}`)
       const url = await yta(play.url);
-      await m.sendMsg(m.jid, url, { quoted: m, mimetype: 'audio/mpeg' }, "audio");
+      const response = await fetch(url);
+      const buffer = await response.buffer();
+      const mp3Buffer = await convertToMp3(buffer);
+      await m.sendMsg(
+      m.jid,
+      mp3Buffer,
+      {
+        quoted: m,
+        mimetype: 'audio/mpeg',
+        fileName: `${play.title}.mp3`
+      },
+      "audio"
+    );
       await m.react('🍻');
     } catch (error) {
       await m.react('❌');
-      m.reply(error);
+      m.reply(error.message || String(error));
     }
   });
 
@@ -116,10 +140,15 @@ Sparky({
       await m.react('☠️');
       await m.reply(`Downloading ${play.title}`)
       const url = await yta(play.url);
-      await m.sendMsg(m.jid, url, { quoted: m, mimetype: 'audio/mpeg' }, "audio");
+      const response = await fetch(url);
+      const buffer = await response.buffer();
+      const mp3Buffer = await convertToMp3(buffer);
+      await m.sendMsg(
+  m.jid,
+  mp3Buffer,{quoted: m,mimetype: 'audio/mpeg',fileName: `${play.title}.mp3`},"audio");
       await m.react('🍻');
     } catch (error) {
       await m.react('❌');
-      m.reply(error);
+      m.reply(error.message || String(error));
     }
   });
