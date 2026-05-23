@@ -185,32 +185,21 @@ async ({ m, args }) => {
 
         await m.react('⬇️');
 
-        const res = await getJson(`https://api.itzpire.com/download/pinterest?url=${url}`);
+        const result = await getJson(config.API + "/api/downloader/pin?url=" + url);
 
-        console.log("API RESPONSE:", res);
+        await m.sendFromUrl(
+            result.data.url,
+            { caption: result.data.created_at }
+        );
 
-        const data = res?.data;
+                await m.react('✅');
 
-        if (!data || !data.images || data.images.length === 0) {
-            await m.react('❌');
-            return m.reply("❌ No images found");
-        }
-
-        await m.reply(`📥 Downloading ${data.images.length} images...`);
-
-        // 🔥 send all images
-        for (let img of data.images) {
-            await m.sendMsg(m.jid, img, {}, "image");
-        }
-
-        await m.react('✅');
-
-    } catch (err) {
-        console.log(err);
-        await m.react('❌');
-        m.reply("❌ Pinterest download failed");
-    }
-});
+            } catch (err) {
+                console.log(err);
+                await m.react('❌');
+                m.reply("❌ Pinterest download failed");
+            }
+        });
 
 Sparky({
     name: "fb",
@@ -250,7 +239,7 @@ Sparky({
   const ser = await getJson(config.API + "/api/search/spotify?search=" + args)
   const play = ser.data[0];
         await m.react('⬇️');
-        await m.reply(`_Downloading ${play.name} By ${play.artists}_`)
+        await m.reply(`${lang.WAIT} ${play.name} By ${play.artists}`)
   const url = await spdl(play.link);
   await m.sendMsg(m.jid , url, { mimetype: "audio/mpeg" } , "audio")
    await m.react('✅');     
