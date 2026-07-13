@@ -11,6 +11,7 @@ const axios = require("axios");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
 const ffprobePath = require("ffprobe-static").path;
+const QRCode = require("qrcode");
 ffmpeg.setFfprobePath(ffprobePath);
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -582,4 +583,63 @@ Sparky({
 
     delete audioQueue[m.jid];
     m.reply("➤ Queue cleared");
+});
+
+Sparky({
+    name: "returnqr",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Generate a UPI payment QR"
+}, async ({ m, client, args }) => {
+    if (!args)
+        return m.reply("Usage:\nreturnqr 250");
+    const amount = Number(args);
+    if (isNaN(amount) || amount <= 0)
+        return m.reply("Enter a valid amount.");
+    const upiId = "thejus0644p-1@oksbi";
+    const payeeName = "Thejus";
+    const upi = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${amount}&cu=INR`;
+    const qr = await QRCode.toBuffer(upi);
+    await client.sendMessage(
+        m.jid,
+        {
+            image: qr,
+            caption: `💳 Scan to pay ₹${amount}`
+        },
+        { quoted: m }
+    );
+
+});
+
+Sparky({
+    name: "sendinr",
+    fromMe: isPublic,
+    category: "converters",
+    desc: "Generate UPI payment intent link"
+}, async ({ m, args }) => {
+
+    if (!args)
+        return m.reply("Usage:\nsendinr amount,upiid\n\nExample:\nsendinr 250,test@okaxis");
+
+    const [amount, upiId] = args.split(",").map(x => x.trim());
+
+    if (!amount || isNaN(amount))
+        return m.reply("Invalid amount.");
+
+    if (!upiId)
+        return m.reply("Please provide a valid UPI ID.");
+
+    const intent = `upi://pay?pa=${encodeURIComponent(upiId)}&am=${Number(amount)}&cu=INR`;
+
+    await m.reply(
+`💳 *UPI Payment Request*
+
+💰 Amount: ₹${amount}
+🏦 UPI ID: ${upiId}
+
+Tap the link below to pay:
+
+${intent}`
+    );
+
 });
